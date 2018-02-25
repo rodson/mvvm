@@ -76,7 +76,12 @@ var compileUtil = {
   },
 
   bind: function(node, vm, exp, dir) {
-    var updateFn = updater;
+    var updateFn = updater[dir + 'Updater'];
+    updateFn && updateFn(node, this._getVMVal(vm, exp));
+
+    new Watcher(vm, exp, function(value, oldValue) {
+      updateFn && updateFn(node, value, oldValue);
+    });
   }
 };
 
