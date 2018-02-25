@@ -33,6 +33,12 @@ Compile.prototype = {
 
       if (me.isElementNode(node)) {
         me.compile(node);
+      } else if (me.isTextNode(node) && reg.test(text)) {
+        me.compileText(node, RegExp.$1);
+      }
+
+      if (node.childNodes && node.childNodes.length) {
+        me.compileElement(node);
       }
     });
   },
@@ -47,11 +53,18 @@ Compile.prototype = {
         var exp = attr.value;
         var dir = attrName.substring(2);
         if (me.isEventDirective(dir)) {
+          compileUtil.eventHandler(node, me.$vm, exp, dir);
         } else {
+          compileUtil[dir] && compileUtil[dir](node, me.$vm, exp);
         }
+        node.removeAttribute(attrName);
       }
     });
   },
+
+  compileText: function(node, exp) {
+    compileUtil.text(node, this.$vm, exp);
+  }, 
 
   isDirective: function(attr) {
     return attr.indexOf('v-') == 0;
@@ -75,12 +88,64 @@ var compileUtil = {
     this.bind(node, vm, exp, 'text');
   },
 
+  html: function(node, vm, exp) {
+    this.bind(node, vm, exp, 'html');
+  },
+
+  model: function(node, vm, exp) {
+    this.bind(node, vm, exp, 'model');
+    
+    var me = this;
+    var val = this._getVMVal(vm, exp);
+    node.addEventListener('input', function(e) {
+      var newValue = e.target.value;
+      if (val === newValue) {
+        return;
+      }
+      me._setVMVal(vm, exp, newValue);
+      val = newValue;
+    });
+  },
+
+  class: function(node, vm, exp) {
+    this.bind(node, vm, exp, 'class');
+  },
+
   bind: function(node, vm, exp, dir) {
     var updateFn = updater[dir + 'Updater'];
     updateFn && updateFn(node, this._getVMVal(vm, exp));
 
     new Watcher(vm, exp, function(value, oldValue) {
       updateFn && updateFn(node, value, oldValue);
+    });
+  },
+
+  eventHandler: function(node, vm, exp, dir) {
+    var eventType = dir.split(':')[1];
+    var fn = vm.$options.methods && vm.$options.methods[exp];
+    if (eventType && fn) {
+      node.addEventListener(eventType, fn.bind(vm), false);
+    }
+  },
+
+  _getVMVal: function(vm, exp) {
+    var val = vm;
+    exp = exp.split('.');
+    exp.forEach(function(k) {
+      val = val[k];
+    });
+    return val;
+  },
+
+  _setVMVal: function(vm, exp, value) {
+    var val = vm;
+    exp = exp.split('.');
+    exp.forEach(function(k, i) {
+      if (i < exp.length - 1) {
+        val = val[k];
+      } else {
+        val[k] = value;
+      }
     });
   }
 };
